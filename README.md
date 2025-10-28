@@ -1,1 +1,3 @@
-# pycanupo
+﻿# pycanupo
+
+Initialized with Git.
