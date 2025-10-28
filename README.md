@@ -1,6 +1,6 @@
 ﻿# PyCANUPO
 
-A modular, pure-Python re-implementation of the CANUPO point cloud classifier using **CloudComPy**, **scikit-learn**, and **NumPy**.
+A modular, pure-Python implementation of the CANUPO point cloud classifier using **CloudComPy**, **scikit-learn**, and **NumPy**.
 
 ## Structure
 
