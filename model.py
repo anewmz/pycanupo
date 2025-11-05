@@ -8,9 +8,7 @@ from pathlib import Path
 from joblib import dump, load
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
-from sklearn.calibration import CalibratedClassifierCV
 
 from io_utils import read_cloud, cloud_to_numpy, add_or_replace_scalar_field, ensure_parent_dir
 from features import multiscale_features, estimate_radii
@@ -63,13 +61,8 @@ def cmd_train(args):
     X = np.vstack(X_list)
     y = np.concatenate(y_list)
 
-    # Model: choose SVM + calibration (probabilities) by default
-    if args.model == "svm":
-        base = SVC(C=args.C, gamma=args.gamma, kernel=args.kernel, probability=False, class_weight="balanced")
-        clf = CalibratedClassifierCV(base, method="sigmoid", cv=5)
-    else:
-        # logistic regression
-        clf = LogisticRegression(max_iter=500, class_weight="balanced", n_jobs=None)
+
+    clf = LogisticRegression(max_iter=500, class_weight="balanced", n_jobs=None)
 
     pipe = Pipeline([
         ("scaler", StandardScaler(with_mean=True, with_std=True)),
@@ -80,7 +73,7 @@ def cmd_train(args):
 
     out = {
         "radii": radii,
-        "model_type": args.model,
+        "model_type": "logreg",
         "sk_pipeline": pipe,
         "meta": {
             "class_map": {0: args.label0, 1: args.label1},
@@ -93,43 +86,39 @@ def cmd_train(args):
     print(f"     Radii: {radii}")
     print(f"     Classes: 0→{args.label0}, 1→{args.label1}")
 
-    # --- ALWAYS try to export a portable JSON (.pyprm) when using logreg ---
-    # If args.pyprm is missing/None, default to <args.out>.pyprm in the same folder.
-    if args.model == "logreg":
-        try:
-            scaler = pipe.named_steps["scaler"]
-            lr     = pipe.named_steps["clf"]
+    # Export a portable JSON (.pyprm) for logistic regression
+    try:
+        scaler = pipe.named_steps["scaler"]
+        lr     = pipe.named_steps["clf"]
 
-            model_json = {
-                "version": 2,
-                "radii": radii,
-                "scaler": {
-                    "mean":  scaler.mean_.tolist(),
-                    "scale": scaler.scale_.tolist()
-                },
-                "clf": {
-                    "type": "logreg",
-                    "coef":  lr.coef_.tolist(),
-                    "intercept": lr.intercept_.tolist()
-                },
-                "features_per_scale": 6,
-                "class_map": {"0": args.label0, "1": args.label1}
-            }
+        model_json = {
+            "version": 2,
+            "radii": radii,
+            "scaler": {
+                "mean":  scaler.mean_.tolist(),
+                "scale": scaler.scale_.tolist()
+            },
+            "clf": {
+                "type": "logreg",
+                "coef":  lr.coef_.tolist(),
+                "intercept": lr.intercept_.tolist()
+            },
+            "features_per_scale": 6,
+            "class_map": {"0": args.label0, "1": args.label1}
+        }
 
-            # Decide target path
-            target_pyprm = getattr(args, "pyprm", None)
-            if not target_pyprm:
-                target_pyprm = str(Path(args.out).with_suffix(".pyprm"))
+        # Decide target path
+        target_pyprm = getattr(args, "pyprm", None)
+        if not target_pyprm:
+            target_pyprm = str(Path(args.out).with_suffix(".pyprm"))
 
-            # Write
-            Path(target_pyprm).parent.mkdir(parents=True, exist_ok=True)
-            Path(target_pyprm).write_text(json.dumps(model_json, indent=2))
+        # Write
+        Path(target_pyprm).parent.mkdir(parents=True, exist_ok=True)
+        Path(target_pyprm).write_text(json.dumps(model_json, indent=2))
 
-            print(f"[OK] Portable model saved to: {target_pyprm}")
-        except Exception as e:
-            print(f"[error] .pyprm export failed: {e}")
-    else:
-        print("[info] Skipping .pyprm (model is not 'logreg').")
+        print(f"[OK] Portable model saved to: {target_pyprm}")
+    except Exception as e:
+        print(f"[error] .pyprm export failed: {e}")
 
 
 def cmd_predict(args):
@@ -183,10 +172,7 @@ def cmd_predict(args):
     yhat = probs.argmax(axis=1)
     conf = probs.max(axis=1)
 
-    # threshold → reject to -1
-    if args.threshold is not None:
-        thr = float(args.threshold)
-        yhat = np.where(conf >= thr, yhat, -1)
+
 
     # --- write scalar fields ---
     idx_class = add_or_replace_scalar_field(cloud, "PYCANUPO.class", yhat.astype(float))
@@ -213,6 +199,4 @@ def cmd_predict(args):
 
     print(f"[OK] Predicted classes written. Saved: {out_path}")
     print(f"     class_map: {json.dumps(class_map)}")
-    if args.threshold is not None:
-        n_reject = int((yhat == -1).sum())
-        print(f"     Rejected (confidence<{args.threshold}): {n_reject} / {len(yhat)}")
+

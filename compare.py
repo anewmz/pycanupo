@@ -68,11 +68,6 @@ def cmd_compare(args):
     y_py = probs_py.argmax(axis=1)
     c_py = probs_py.max(axis=1)
 
-    # optional reject by threshold
-    if args.threshold is not None:
-        thr = float(args.threshold)
-        y_py = np.where(c_py >= thr, y_py, -1)
-
     # --- 3) Save OUR fields on the same entity ---
     idx_cls_py = add_or_replace_scalar_field(cloud, "PYCANUPO.class", y_py.astype(float))
     _          = add_or_replace_scalar_field(cloud, "PYCANUPO.confidence", c_py.astype(float))
@@ -93,7 +88,7 @@ def cmd_compare(args):
     metrics = _safe_metrics(y_ref, y_cmp)
 
     print("\n=== qCANUPO vs Python Model (CANUPO as reference) ===")
-    print(f"Used points: {metrics['used_pts']} / {valid.sum()} (excludes rejected by threshold)")
+    print(f"Used points: {metrics['used_pts']} / {valid.sum()}")
     print("Confusion matrix (rows=ref, cols=pred):")
     print(metrics["cm"])
     print(f"Accuracy: {metrics['acc']:.4f} | Cohen's κ: {metrics['kappa']:.4f}")

@@ -51,10 +51,8 @@ def build_parser():
     pt.add_argument("--radii", default="0.05,0.10,0.20", help="comma-separated radii (same units as cloud) or 'auto'")
     pt.add_argument("--knn", type=int, default=16, help="k for auto-radii estimation (if radii='auto')")
     pt.add_argument("--levels", type=int, default=4, help="number of levels for auto-radii (if radii='auto')")
-    pt.add_argument("--model", choices=["svm", "logreg"], default="svm")
-    pt.add_argument("--C", type=float, default=10.0, help="SVM C (if svm)")
-    pt.add_argument("--gamma", default="scale", help="SVM gamma (if svm)")
-    pt.add_argument("--kernel", default="rbf", help="SVM kernel (if svm)")
+    # Only logistic regression supported now
+    pt.add_argument("--model", choices=["logreg"], default="logreg")
     pt.add_argument("-o", "--out", required=True, help="output .pkl")
     pt.add_argument("--pyprm", default=None, help="output .pyprm path (auto-generated from --out if logreg and not specified)")
     pt.set_defaults(func=cmd_train)
@@ -63,7 +61,7 @@ def build_parser():
     pp = sub.add_parser("predict", help="classify a new cloud")
     pp.add_argument("--model", required=True, help="trained model .pkl")
     pp.add_argument("--cloud", required=True, help="input cloud (PLY, LAS/LAZ, BIN, ASC, etc.)")
-    pp.add_argument("--threshold", type=float, default=None, help="optional confidence threshold for 'reject'")
+    # Confidence-thresholding removed: predictions will always be class labels
     pp.add_argument("-o", "--out", required=True, help="output path (e.g., classified.bin)")
     pp.set_defaults(func=cmd_predict)
 
@@ -72,7 +70,7 @@ def build_parser():
     pc.add_argument("--prm_path", required=True, help="qCANUPO .prm file")
     pc.add_argument("--model", required=True, help=".pyprm or .pkl for your Python model")
     pc.add_argument("--cloud", required=True, help="input cloud")
-    pc.add_argument("--threshold", type=float, default=None, help="reject our model if confidence<threshold (sets -1)")
+    # Confidence-thresholding removed for compare
     pc.add_argument("-o", "--out", required=True, help="output path (e.g., compare.bin)")
     pc.set_defaults(func=cmd_compare)
 
