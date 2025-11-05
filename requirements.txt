@@ -1,0 +1,6 @@
+numpy>=1.20.0
+scikit-learn>=1.0.0
+joblib>=1.0.0
+
+# CloudComPy must be installed separately from binaries
+# See INSTALL.md or https://www.simulation.openfields.fr/index.php/cloudcompy-downloads/
