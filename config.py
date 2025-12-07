@@ -46,21 +46,20 @@ SCENE_OUTS = [
 ]
 
 # Labels and training knobs
-LABEL0 = "rock"
-LABEL1 = "veg"
+LABEL0 = "Rock"
+LABEL1 = "Veg"
 
 # Radii: "auto" or comma list like "0.03,0.06,0.12,0.24"
 RADII_ARG = "auto"
-KNN_FOR_AUTO   = 16
-LEVELS_FOR_AUTO = 4
+KNN_FOR_AUTO   = 6
+LEVELS_FOR_AUTO = 6
 
-# Model: "logreg" (portable .pyprm) or "svm" (.pkl only)
+# Model: "logreg" (portable .pyprm) or "svm" (.pkl only) or "rf" (Random Forest)
 MODEL_TYPE = "logreg"
 
 # Prediction threshold (None, or e.g., 0.6–0.8)
-CONF_THRESHOLD = 0.7
+CONF_THRESHOLD = 0.75
 
 # Turn this ON to run inline without using CLI
-RUN_INLINE = False
+RUN_INLINE = True
 # ================================================================
-
