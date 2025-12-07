@@ -10,8 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 # CloudComPy setup (configure if needed)
-# sys.path.append(r"C:\Users\alsay\CloudComPy310\CloudCompare")
-# os.environ["_CCTRACE_"] = "ON"  # only if you want C++ debug traces
+sys.path.append(r"C:\CloudComPy310\CloudCompare")
+os.environ["_CCTRACE_"] = "ON"  # only if you want C++ debug traces
 
 from model import cmd_train, cmd_predict
 from compare import cmd_compare
@@ -51,18 +51,32 @@ def build_parser():
     pt.add_argument("--radii", default="0.05,0.10,0.20", help="comma-separated radii (same units as cloud) or 'auto'")
     pt.add_argument("--knn", type=int, default=16, help="k for auto-radii estimation (if radii='auto')")
     pt.add_argument("--levels", type=int, default=4, help="number of levels for auto-radii (if radii='auto')")
-    # Only logistic regression supported now
-    pt.add_argument("--model", choices=["logreg"], default="logreg")
+
+    pt.add_argument("--model", choices=["svm", "logreg", "rf"], default="logreg", help="Model type: svm, logreg, or rf")
+    pt.add_argument("--C", type=float, default=10.0, help="SVM C parameter (if model=svm)")
+    pt.add_argument("--gamma", default="scale", help="SVM gamma parameter (if model=svm)")
+    pt.add_argument("--kernel", default="rbf", help="SVM kernel (if model=svm)")
+    pt.add_argument("--n_estimators", type=int, default=200, help="RandomForest n_estimators (if model=rf)")
+    pt.add_argument("--max_depth", type=int, default=None, help="RandomForest max_depth (if model=rf)")
+    pt.add_argument("--tune", action="store_true", help="run randomized hyperparameter tuning before final fit")
+    pt.add_argument("--n_iter", type=int, default=30, help="RandomizedSearchCV n_iter (if tune=True)")
+    pt.add_argument("--cv", type=int, default=5, help="CV folds for tuning (if tune=True)")
+    pt.add_argument("--scoring", default="f1_macro", help="scoring metric for tuning")
+    pt.add_argument("--n_jobs", type=int, default=-1, help="n_jobs for tuning (RandomizedSearchCV)")
     pt.add_argument("-o", "--out", required=True, help="output .pkl")
     pt.add_argument("--pyprm", default=None, help="output .pyprm path (auto-generated from --out if logreg and not specified)")
     pt.set_defaults(func=cmd_train)
 
     # ---- predict
     pp = sub.add_parser("predict", help="classify a new cloud")
-    pp.add_argument("--model", required=True, help="trained model .pkl")
+    pp.add_argument("--model", required=True, help="trained model .pkl or .pyprm")
     pp.add_argument("--cloud", required=True, help="input cloud (PLY, LAS/LAZ, BIN, ASC, etc.)")
-    # Confidence-thresholding removed: predictions will always be class labels
+    pp.add_argument("--threshold", type=float, default=None, help="optional confidence threshold for 'reject'")
     pp.add_argument("-o", "--out", required=True, help="output path (e.g., classified.bin)")
+    pp.add_argument("--smooth", action="store_true", help="apply neighborhood majority smoothing after prediction")
+    pp.add_argument("--smooth_radius", type=float, default=None, help="use radius based smoothing (same units as cloud)")
+    pp.add_argument("--smooth_k", type=int, default=None, help="use k-NN smoothing (preferred for uniform-density clouds)")
+    pp.add_argument("--smooth_min_neighbors", type=int, default=3, help="minimum neighbors required to perform smoothing")
     pp.set_defaults(func=cmd_predict)
 
     # ---- compare
@@ -70,7 +84,11 @@ def build_parser():
     pc.add_argument("--prm_path", required=True, help="qCANUPO .prm file")
     pc.add_argument("--model", required=True, help=".pyprm or .pkl for your Python model")
     pc.add_argument("--cloud", required=True, help="input cloud")
-    # Confidence-thresholding removed for compare
+    pc.add_argument("--threshold", type=float, default=None, help="reject our model if confidence<threshold (sets -1)")
+    pc.add_argument("--smooth", action="store_true", help="apply neighborhood majority smoothing after prediction")
+    pc.add_argument("--smooth_radius", type=float, default=None, help="use radius based smoothing (same units as cloud)")
+    pc.add_argument("--smooth_k", type=int, default=None, help="use k-NN smoothing (preferred for uniform-density clouds)")
+    pc.add_argument("--smooth_min_neighbors", type=int, default=3, help="minimum neighbors required to perform smoothing")
     pc.add_argument("-o", "--out", required=True, help="output path (e.g., compare.bin)")
     pc.set_defaults(func=cmd_compare)
 
@@ -90,10 +108,17 @@ def main():
             radii=RADII_ARG,           # "auto" or "0.03,0.06,..."
             knn=KNN_FOR_AUTO,
             levels=LEVELS_FOR_AUTO,
-            model=MODEL_TYPE,          # "logreg" or "svm"
+            model=MODEL_TYPE,          # "logreg", "svm", or "rf"
             C=10.0,
             gamma="scale",
             kernel="rbf",
+            n_estimators=200,
+            max_depth=None,
+            tune=False,
+            n_iter=30,
+            cv=5,
+            scoring="f1_macro",
+            n_jobs=-1,
             out=PKL_OUT,
             pyprm=PYPRM_OUT if MODEL_TYPE == "logreg" else None,
         )
@@ -107,6 +132,10 @@ def main():
                 model=model_path,
                 cloud=scene_path,
                 threshold=CONF_THRESHOLD,
+                smooth=False,
+                smooth_radius=None,
+                smooth_k=None,
+                smooth_min_neighbors=3,
                 out=out_path,
             )
             cmd_predict(predict_args)

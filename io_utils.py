@@ -5,6 +5,7 @@ I/O utilities for reading, writing, and manipulating point clouds with CloudComP
 import numpy as np
 import cloudComPy as cc
 from pathlib import Path
+from sklearn.neighbors import KDTree
 
 
 def read_cloud(path: str):
@@ -70,3 +71,55 @@ def get_scalar_array(cloud, name: str) -> np.ndarray:
 def ensure_parent_dir(path_str: str) -> None:
     """Create the parent folder for a file path if it doesn't exist."""
     Path(path_str).parent.mkdir(parents=True, exist_ok=True)
+
+
+def majority_smooth_labels(X: np.ndarray, labels: np.ndarray, radius: float | None = None, k: int | None = None, min_neighbors: int = 3) -> np.ndarray:
+    """Return labels smoothed by neighborhood majority vote.
+
+    - X: (N x 3) point coordinates
+    - labels: (N,) int labels (use -1 for rejected points)
+    - radius: use radius neighbors if provided; else use k nearest neighbors
+    - k: if provided use k-NN (ignores point itself when k>1)
+    - min_neighbors: don't change labels if neighborhood too small
+    """
+    N = X.shape[0]
+    if radius is None and k is None:
+        k = 8
+
+    tree = KDTree(X)
+    out = labels.copy()
+
+    if radius is not None:
+        idxs = tree.query_radius(X, r=radius, return_distance=False)
+        for i in range(N):
+            neigh = idxs[i]
+            # exclude the point itself if present
+            neigh = neigh[neigh != i]
+            if neigh.size < min_neighbors:
+                continue
+            vals = labels[neigh]
+            # ignore rejected neighbors
+            vals = vals[vals != -1]
+            if vals.size == 0:
+                continue
+            # majority vote
+            vals_uni, counts = np.unique(vals, return_counts=True)
+            out[i] = vals_uni[np.argmax(counts)]
+    else:
+        # k-NN (including the point itself by default) -> use k+1 to ensure excluding itself
+        kk = k + 1 if k is not None and k > 0 else 9
+        d, idxs = tree.query(X, k=kk)
+        for i in range(N):
+            neigh = idxs[i]
+            # exclude itself (first entry normally)
+            neigh = neigh[neigh != i]
+            if neigh.size < min_neighbors:
+                continue
+            vals = labels[neigh]
+            vals = vals[vals != -1]
+            if vals.size == 0:
+                continue
+            vals_uni, counts = np.unique(vals, return_counts=True)
+            out[i] = vals_uni[np.argmax(counts)]
+
+    return out

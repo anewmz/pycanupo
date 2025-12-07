@@ -8,7 +8,7 @@ from pathlib import Path
 from joblib import load
 import cloudComPy as cc
 
-from io_utils import read_cloud, cloud_to_numpy, add_or_replace_scalar_field, get_scalar_array
+from io_utils import read_cloud, cloud_to_numpy, add_or_replace_scalar_field, get_scalar_array, majority_smooth_labels
 from features import multiscale_features
 from metrics import _safe_metrics
 
@@ -68,6 +68,15 @@ def cmd_compare(args):
     y_py = probs_py.argmax(axis=1)
     c_py = probs_py.max(axis=1)
 
+    # optional reject by threshold
+    if args.threshold is not None:
+        thr = float(args.threshold)
+        y_py = np.where(c_py >= thr, y_py, -1)
+
+    if getattr(args, "smooth", False):
+        print(f"[info] Applying majority smoothing to Python model results (radius={getattr(args,'smooth_radius',None)} k={getattr(args,'smooth_k',None)})")
+        y_py = majority_smooth_labels(P, y_py, radius=getattr(args, "smooth_radius", None), k=getattr(args, "smooth_k", None), min_neighbors=getattr(args, "smooth_min_neighbors", 3))
+
     # --- 3) Save OUR fields on the same entity ---
     idx_cls_py = add_or_replace_scalar_field(cloud, "PYCANUPO.class", y_py.astype(float))
     _          = add_or_replace_scalar_field(cloud, "PYCANUPO.confidence", c_py.astype(float))
@@ -88,7 +97,7 @@ def cmd_compare(args):
     metrics = _safe_metrics(y_ref, y_cmp)
 
     print("\n=== qCANUPO vs Python Model (CANUPO as reference) ===")
-    print(f"Used points: {metrics['used_pts']} / {valid.sum()}")
+    print(f"Used points: {metrics['used_pts']} / {valid.sum()} (excludes rejected by threshold)")
     print("Confusion matrix (rows=ref, cols=pred):")
     print(metrics["cm"])
     print(f"Accuracy: {metrics['acc']:.4f} | Cohen's κ: {metrics['kappa']:.4f}")
